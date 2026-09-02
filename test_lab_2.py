@@ -60,6 +60,18 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _normalize_prose(text: str) -> str:
+    """Compare record prompts forgivingly. A student filling in the record
+    reasonably bolds a label, fixes its capitalisation, or lets the editor
+    rewrap a long line. None of that changes whether the prompt was answered,
+    so none of it should cost the point. Whether the answer is any good is
+    graded by a human."""
+    text = re.sub(r"[*_`]+", "", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s+:", ":", text)
+    return text.casefold()
+
+
 def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -96,9 +108,10 @@ def check_required_files(repo: Path) -> list[str]:
         errors.append("Missing required directory: docs/")
         return errors
 
+    present = {entry.name.casefold(): entry for entry in docs.iterdir() if entry.is_file()}
     for filename in EXPECTED_SCREENSHOTS:
-        path = docs / filename
-        if not path.is_file():
+        path = present.get(filename.casefold())
+        if path is None:
             errors.append(f"Missing required screenshot: docs/{filename}")
             continue
         dimensions = _png_dimensions(path)
@@ -119,7 +132,9 @@ def check_readme_and_record(repo: Path) -> list[str]:
     record_path = repo / "ros2_cli_record.md"
     if record_path.is_file():
         record = _read_text(record_path)
-        missing = [item for item in REQUIRED_RECORD_TEXT if item not in record]
+        normalized = _normalize_prose(record)
+        missing = [item for item in REQUIRED_RECORD_TEXT
+                   if _normalize_prose(item) not in normalized]
         if missing:
             errors.append(
                 "ros2_cli_record.md is missing required headings or prompts: "
