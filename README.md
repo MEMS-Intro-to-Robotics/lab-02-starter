@@ -21,7 +21,6 @@ the report.
 From the repository root on the VM:
 
 ```bash
-python3 -m pip install pytest
 pytest -v
 ```
 
